@@ -397,11 +397,8 @@ const PARTS = [
  ]}
 ];
 
-const STORE_KEY = "ai-brand-questionnaire-v1";
 let state = {};
-try { state = JSON.parse(localStorage.getItem(STORE_KEY) || "{}") || {}; } catch(e) { state = {}; }
-let saveT;
-const save = () => { clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch(e){} }, 250); };
+const save = () => {};
 const el = (t, c, x) => { const n = document.createElement(t); if(c) n.className = c; if(x != null) n.textContent = x; return n; };
 const filled = v => Array.isArray(v) ? v.length > 0 : (typeof v === "number" ? true : !!(v && String(v).trim()));
 
