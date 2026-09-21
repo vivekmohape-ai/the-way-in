@@ -52,7 +52,7 @@ def build_frontend(source: str) -> tuple[str, str, str]:
     core_js = core_js.replace("render(); update(); watchChapters();", "if(!initialized){ render(); update(); watchChapters(); }")
 
     # Scope selector lookups to this V2 component. Creation APIs remain global.
-    core_js = re.sub(r'document\.getElementById\(("[^"]+")\)', r'root.querySelector("#" + \1.slice(1, -1))', core_js)
+    core_js = re.sub(r'document\.getElementById\(("[^"]+")\)', lambda m: 'root.querySelector("#' + m.group(1)[1:-1] + '")', core_js)
     core_js = core_js.replace("document.querySelectorAll(", "root.querySelectorAll(")
     core_js = core_js.replace("document.querySelector(", "root.querySelector(")
 
