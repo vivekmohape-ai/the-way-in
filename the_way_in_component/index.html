@@ -343,7 +343,36 @@ textarea.a{min-height:92px;overflow:hidden}
 </footer>
 <div class="toast" id="toast" role="status"></div>
 
-<script src="https://unpkg.com/streamlit-component-lib@2.0.0/dist/index.js"></script>
+<script>
+/*
+  Minimal Streamlit component bridge.
+  Kept inline so the component does not depend on an external CDN
+  for streamlit-component-lib.
+*/
+window.Streamlit = {
+  setComponentReady: function() {
+    window.parent.postMessage({
+      isStreamlitMessage: true,
+      type: "streamlit:componentReady",
+      apiVersion: 1
+    }, "*");
+  },
+  setFrameHeight: function(height) {
+    window.parent.postMessage({
+      isStreamlitMessage: true,
+      type: "streamlit:setFrameHeight",
+      height: Number(height) || 0
+    }, "*");
+  },
+  setComponentValue: function(value) {
+    window.parent.postMessage({
+      isStreamlitMessage: true,
+      type: "streamlit:setComponentValue",
+      value: value
+    }, "*");
+  }
+};
+</script>
 <script>
 const PAL = {cobalt:"#3e63ff",iris:"#9b6bff",rose:"#ff6fa8",amber:"#ffbf6b",mint:"#4fe0c0"};
 const PARTS = [
@@ -622,8 +651,14 @@ render(); update(); watchChapters();
 
 if(window.Streamlit){
   Streamlit.setComponentReady();
-  Streamlit.setFrameHeight(document.documentElement.scrollHeight);
-  window.addEventListener("resize", () => Streamlit.setFrameHeight(document.documentElement.scrollHeight));
+  const updateFrameHeight = () => {
+    Streamlit.setFrameHeight(document.documentElement.scrollHeight);
+  };
+  updateFrameHeight();
+  window.addEventListener("resize", updateFrameHeight);
+  if (window.ResizeObserver) {
+    new ResizeObserver(updateFrameHeight).observe(document.body);
+  }
 }
 
 </script>
