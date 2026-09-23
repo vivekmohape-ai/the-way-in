@@ -15,6 +15,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+
 SOURCE = Path(__file__).with_name("original.html")
 
 
@@ -28,11 +29,7 @@ def extract_source_parts(source: str) -> tuple[str, str, str]:
             "The original HTML structure is missing its style, body, or script block."
         )
 
-    return (
-        style_match.group(1),
-        body_match.group(1),
-        script_match.group(1),
-    )
+    return style_match.group(1), body_match.group(1), script_match.group(1)
 
 
 def build_frontend(source: str) -> tuple[str, str, str]:
@@ -66,21 +63,38 @@ def build_frontend(source: str) -> tuple[str, str, str]:
 
     core_js = original_js[:backend_start]
 
+    # IMPORTANT: setupServicingDropdown() originally declares a local `root`.
+    # The generic DOM scoping below also converts document.getElementById(...) to
+    # root.querySelector(...). Without this rename, that line becomes:
+    # const root = root.querySelector(...)
+    # which causes: Cannot access 'root' before initialization.
+    start = core_js.find("function setupServicingDropdown(){")
+    end = core_js.find("function setupDatePicker(){", start)
+    if start >= 0 and end > start:
+        block = core_js[start:end]
+        block = block.replace(
+            'const root = document.getElementById("servicingSelect");',
+            'const servicingRoot = document.getElementById("servicingSelect");',
+            1,
+        )
+        block = block.replace("root.dataset", "servicingRoot.dataset")
+        block = block.replace("!root.", "!servicingRoot.")
+        block = block.replace("root.classList", "servicingRoot.classList")
+        block = block.replace("root.querySelector", "servicingRoot.querySelector")
+        block = block.replace("root.contains", "servicingRoot.contains")
+        core_js = core_js[:start] + block + core_js[end:]
+
+    # Scope normal DOM lookups to the Streamlit V2 component root.
     core_js = re.sub(
-        r'document\.getElementById\((\"[^\"]+\")\)',
+        r'document\.getElementById\(("[^"]+")\)',
         lambda m: 'root.querySelector("#' + m.group(1)[1:-1] + '")',
         core_js,
     )
-    core_js = core_js.replace(
-        "document.querySelectorAll(",
-        "root.querySelectorAll(",
-    )
-    core_js = core_js.replace(
-        "document.querySelector(",
-        "root.querySelector(",
-    )
+    core_js = core_js.replace("document.querySelectorAll(", "root.querySelectorAll(")
+    core_js = core_js.replace("document.querySelector(", "root.querySelector(")
 
-    core_js += r"""
+    core_js += r'''
+
 const toastEl = root.querySelector("#toast");
 const statusEl = root.querySelector("#status");
 
@@ -98,36 +112,25 @@ const sendBtn = root.querySelector("#sendBtn");
 const dlBtn = root.querySelector("#dlBtn");
 
 sendBtn.hidden = false;
-
 dlBtn.hidden = false;
 dlBtn.textContent = "Download your answers";
 
 sendBtn.onclick = () => {
     if(!filled(state.client)) {
-        statusEl.textContent =
-            "Add the brand name at the top before sending.";
-        root
-            .querySelector('[data-key="client"]')
-            .focus();
+        statusEl.textContent = "Add the brand name at the top before sending.";
+        root.querySelector('[data-key="client"]').focus();
         return;
     }
 
     if(!filled(state.servicing)) {
-        statusEl.textContent =
-            "Select the Client Servicing person before sending.";
-        root
-            .querySelector('[data-key="servicing"] .servicing-trigger')
-            .focus();
+        statusEl.textContent = "Select the Client Servicing person before sending.";
+        root.querySelector('[data-key="servicing"] .servicing-trigger').focus();
         return;
     }
 
     sendBtn.disabled = true;
     statusEl.textContent = "Sending…";
-
-    setTriggerValue(
-        "submit",
-        payload()
-    );
+    setTriggerValue("submit", payload());
 };
 
 dlBtn.onclick = () => {
@@ -138,30 +141,17 @@ dlBtn.onclick = () => {
         .replace(/\s+/g, "-")
         || "answers";
 
-    const url =
-        URL.createObjectURL(
-            new Blob(
-                [toMarkdown()],
-                { type: "text/markdown" }
-            )
-        );
+    const url = URL.createObjectURL(
+        new Blob([toMarkdown()], { type: "text/markdown" })
+    );
 
     const a = document.createElement("a");
     a.href = url;
-    a.download =
-        "Brand-Questionnaire-" +
-        slug +
-        ".md";
-
+    a.download = "Brand-Questionnaire-" + slug + ".md";
     document.body.append(a);
     a.click();
     a.remove();
-
-    setTimeout(
-        () => URL.revokeObjectURL(url),
-        1000
-    );
-
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast("Answers downloaded.");
 };
 
@@ -176,13 +166,18 @@ else if(data?.send_status === "error") {
     statusEl.textContent =
         "Couldn’t send. Check the Streamlit SMTP secrets and try again.";
 }
+'''
+
+    # The HTML already initializes the dropdown and date picker in its own script.
+    # We execute those helpers after the Streamlit wrapper has defined root.
+    core_js += r'''
 
 render();
 update();
 setupServicingDropdown();
 setupDatePicker();
 watchChapters();
-"""
+'''
 
     js = """
 export default function(component) {
@@ -194,15 +189,7 @@ export default function(component) {
 
     const root = parentElement;
 
-    const initialized =
-        root.dataset.twiInitialized === "1";
-
-    if (!initialized) {
-        root.dataset.twiInitialized = "1";
-    }
-
 """ + core_js + """
-
 }
 """
 
@@ -212,9 +199,7 @@ export default function(component) {
 
 @st.cache_resource(show_spinner=False)
 def frontend(source_mtime_ns: int) -> tuple[str, str, str]:
-    return build_frontend(
-        SOURCE.read_text(encoding="utf-8")
-    )
+    return build_frontend(SOURCE.read_text(encoding="utf-8"))
 
 
 def send_email(payload: dict) -> None:
@@ -233,10 +218,7 @@ def send_email(payload: dict) -> None:
         "Sarvesh Gawade": "SARVESH_EMAIL",
     }
 
-    servicing_person = (
-        payload.get("servicing") or ""
-    ).strip()
-
+    servicing_person = (payload.get("servicing") or "").strip()
     secret_key = servicing_secret_keys.get(servicing_person)
     if not secret_key:
         raise ValueError("Invalid or missing Client Servicing selection")
@@ -258,15 +240,9 @@ def send_email(payload: dict) -> None:
     client = payload.get("client") or "Untitled"
     ref = payload.get("ref") or "No reference"
 
-    subject = (
-        f"The Way In submission | "
-        f"{client} | {ref}"
-    )
+    subject = f"The Way In submission | {client} | {ref}"
 
-    markdown = (
-        payload.get("markdown")
-        or "No answers submitted."
-    )
+    markdown = payload.get("markdown") or "No answers submitted."
 
     plain = (
         "The Way In — Another Idea\n\n"
@@ -275,8 +251,7 @@ def send_email(payload: dict) -> None:
         f"Client Servicing: {servicing_person}\n"
         f"Reference: {ref}\n"
         f"Date: {payload.get('date') or '—'}\n"
-        f"Submitted at: "
-        f"{payload.get('submittedAt') or '—'}\n\n"
+        f"Submitted at: {payload.get('submittedAt') or '—'}\n\n"
         f"{markdown}\n"
     )
 
@@ -291,11 +266,7 @@ def send_email(payload: dict) -> None:
     smtp_host = st.secrets.get("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(st.secrets.get("SMTP_PORT", 465))
 
-    with smtplib.SMTP_SSL(
-        smtp_host,
-        smtp_port,
-        timeout=30,
-    ) as smtp:
+    with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30) as smtp:
         smtp.login(smtp_user, smtp_pass)
         smtp.send_message(msg)
 
@@ -310,10 +281,7 @@ component = st.components.v2.component(
     isolate_styles=False,
 )
 
-send_status = st.session_state.pop(
-    "twi_send_status",
-    None,
-)
+send_status = st.session_state.pop("twi_send_status", None)
 
 result = component(
     key="the-way-in-questionnaire-v2",
