@@ -23,7 +23,14 @@
   --card:rgba(255,255,255,.62); --card-hi:rgba(255,255,255,.85); --nav:rgba(245,245,247,.7);
   --btn-bg:#1d1d1f; --btn-fg:#fff; --blob:.32; color-scheme:light;
 }
-
+@media (prefers-color-scheme:light){
+  :root:not([data-theme="dark"]){
+    --bg:#f5f5f7; --text:#1d1d1f; --muted:#5e5e63; --faint:#8e8e93;
+    --line:rgba(0,0,0,.1); --line-strong:rgba(0,0,0,.25);
+    --card:rgba(255,255,255,.62); --card-hi:rgba(255,255,255,.85); --nav:rgba(245,245,247,.7);
+    --btn-bg:#1d1d1f; --btn-fg:#fff; --blob:.32; color-scheme:light;
+  }
+}
 :root[data-theme="dark"]{--bg:#000;--text:#f5f5f7;--muted:#a1a1a6;--faint:#6e6e73;--line:rgba(255,255,255,.12);--line-strong:rgba(255,255,255,.28);--card:rgba(255,255,255,.045);--card-hi:rgba(255,255,255,.07);--nav:rgba(0,0,0,.55);--btn-bg:#f5f5f7;--btn-fg:#000;--blob:.55;color-scheme:dark}
 
 *,*::before,*::after{box-sizing:inherit}
@@ -38,6 +45,7 @@ a{color:inherit}
 
 .logo-dark{display:block}.logo-light{display:none}
 :root[data-theme="light"] .logo-dark{display:none}:root[data-theme="light"] .logo-light{display:block}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]) .logo-dark{display:none}:root:not([data-theme="dark"]) .logo-light{display:block}}
 
 /* ---------- Nav ---------- */
 .nav{position:fixed;left:0;right:0;top:0;z-index:50;padding-top:env(safe-area-inset-top,0px);
@@ -136,9 +144,113 @@ a{color:inherit}
   background:radial-gradient(circle at 20% 30%,var(--cobalt),transparent 40%),radial-gradient(circle at 85% 70%,var(--rose),transparent 40%)}
 .intake h2{font-size:clamp(32px,4vw,52px);font-weight:500;letter-spacing:-.035em;line-height:1;margin:0}
 .intake p{color:var(--muted);margin:14px 0 0}
-.intake-grid{display:grid;grid-template-columns:1.3fr 1.3fr 1fr;gap:32px;margin-top:48px}
+.intake-grid{display:grid;grid-template-columns:1.3fr 1.3fr 1.3fr 1fr;gap:32px;margin-top:48px}
 .fld span{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
 .fld input{width:100%;border:0;background:transparent;outline:none;font-size:clamp(22px,2.2vw,30px);letter-spacing:-.02em;padding:6px 0 12px}
+.servicing-select{position:relative;width:100%}
+.servicing-trigger{
+  appearance:none;
+  width:100%;
+  border:0;
+  background:transparent;
+  outline:none;
+  color:var(--text);
+  font:inherit;
+  font-size:clamp(22px,2.2vw,30px);
+  font-weight:400;
+  line-height:1.5;
+  letter-spacing:-.02em;
+  text-align:left;
+  padding:6px 34px 12px 0;
+  cursor:pointer;
+  position:relative;
+}
+.servicing-trigger::after{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  height:1px;
+  background:var(--line-strong);
+}
+.servicing-select.open .servicing-trigger::after{
+  height:2px;
+  background:linear-gradient(90deg,var(--cobalt),var(--iris));
+}
+.servicing-value{
+  display:block;
+  width:100%;
+  font-family:"PP Neue Montreal","Neue Montreal","Host Grotesk","Inter Tight","Helvetica Neue",Arial,sans-serif;
+  font-size:clamp(22px,2.2vw,30px);
+  font-weight:400;
+  line-height:1.5;
+  letter-spacing:-.02em;
+  color:var(--text);
+}
+.servicing-value.placeholder{color:var(--faint);opacity:1;font-weight:400}
+.servicing-chevron{
+  position:absolute;
+  right:9px;
+  top:50%;
+  width:8px;
+  height:8px;
+  border-right:1.5px solid var(--muted);
+  border-bottom:1.5px solid var(--muted);
+  transform:translateY(-70%) rotate(45deg);
+  transition:transform .2s ease;
+}
+.servicing-select.open .servicing-chevron{transform:translateY(-25%) rotate(225deg)}
+.servicing-menu{
+  position:fixed;
+  z-index:1000;
+  left:0;
+  top:0;
+  width:0;
+  padding:8px;
+  border:1px solid var(--line-strong);
+  border-radius:18px;
+  background:rgba(8,8,10,.96);
+  backdrop-filter:saturate(180%) blur(24px);
+  -webkit-backdrop-filter:saturate(180%) blur(24px);
+  box-shadow:0 24px 70px rgba(0,0,0,.5);
+  max-height:min(380px,calc(100vh - 32px));
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-y;
+  scrollbar-gutter:stable;
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transform:translateY(-4px);
+  transition:opacity .15s ease,transform .15s ease,visibility .15s ease;
+}
+.servicing-select.open .servicing-menu{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+  transform:translateY(0);
+}
+.servicing-option{
+  display:block;
+  width:100%;
+  border:0;
+  background:transparent;
+  color:var(--text);
+  font:400 16px/1.35 "Host Grotesk","Inter Tight","Helvetica Neue",Arial,sans-serif;
+  letter-spacing:-.005em;
+  text-align:left;
+  border-radius:12px;
+  padding:10px 12px;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:background .18s ease,color .18s ease;
+}
+.servicing-option:hover,
+.servicing-option[aria-selected="true"]{background:var(--card-hi);color:#fff}
+.servicing-option:focus-visible{outline:2px solid var(--iris);outline-offset:-2px}
 @media (max-width:860px){.intake{padding:36px 24px;border-radius:28px}.intake-grid{grid-template-columns:1fr;gap:24px}}
 
 /* Underline fields w/ gradient focus */
@@ -147,6 +259,30 @@ a{color:inherit}
 .u:focus{background-size:100% 2px,100% 1px}
 .u:focus-visible{outline:none}
 ::placeholder{color:var(--faint);opacity:1}
+input[type="date"]{
+  color:var(--faint);
+  font-family:"PP Neue Montreal","Neue Montreal","Host Grotesk","Inter Tight","Helvetica Neue",Arial,sans-serif;
+  font-size:clamp(22px,2.2vw,30px);
+  font-weight:400;
+  line-height:1.5;
+  letter-spacing:-.02em;
+}
+input[type="date"].has-value{color:var(--text)}
+input[type="date"]::-webkit-datetime-edit,
+input[type="date"]::-webkit-datetime-edit-text,
+input[type="date"]::-webkit-datetime-edit-month-field,
+input[type="date"]::-webkit-datetime-edit-day-field,
+input[type="date"]::-webkit-datetime-edit-year-field{
+  color:inherit;
+}
+input[type="date"]{
+  cursor:pointer;
+}
+input[type="date"]::-webkit-calendar-picker-indicator{
+  opacity:.95;
+  cursor:pointer;
+}
+
 
 /* ---------- Chapters ---------- */
 .chapter{position:relative;padding:160px 0;border-top:1px solid var(--line)}
@@ -266,6 +402,7 @@ textarea.a{min-height:92px;overflow:hidden}
           <div class="proc-name"><span class="lam" aria-hidden="true"></span>The Way In</div>
           <div class="proc-sub">Another Idea’s brand discovery. Stage one of three.</div>
         </div>
+        <div class="ref">Prepared for<b data-bind="client">Your brand</b><span data-bind="ref"></span></div>
       </div>
       <h1>This is not<br>a test.</h1>
       <p class="lede">It is a way into the truth of the business.</p>
@@ -300,8 +437,28 @@ textarea.a{min-height:92px;overflow:hidden}
         <h2>First, who’s answering?</h2>
         <p>So we know whose words these are.</p>
         <div class="intake-grid">
-          <label class="fld"><span>Client / brand</span><input class="u" data-key="client" autocomplete="organization" placeholder="Brand name"></label>
+          <label class="fld"><span>Client / project</span><input class="u" data-key="client" autocomplete="organization" placeholder="Client or project name"></label>
           <label class="fld"><span>Brand manager</span><input class="u" data-key="manager" autocomplete="name" placeholder="Full name"></label>
+          <label class="fld servicing-field">
+            <span>Client servicing</span>
+            <div class="servicing-select" data-key="servicing" id="servicingSelect">
+              <button type="button" class="servicing-trigger" aria-haspopup="listbox" aria-expanded="false">
+                <span class="servicing-value placeholder">Select team member</span>
+                <span class="servicing-chevron" aria-hidden="true"></span>
+              </button>
+              <div class="servicing-menu" role="listbox" aria-label="Client servicing person">
+                <button type="button" class="servicing-option" role="option" data-value="Adnan Taraporwala">Adnan Taraporwala</button>
+                <button type="button" class="servicing-option" role="option" data-value="Ashish Pawar">Ashish Pawar</button>
+                <button type="button" class="servicing-option" role="option" data-value="Barkha Khandelwal">Barkha Khandelwal</button>
+                <button type="button" class="servicing-option" role="option" data-value="Bhumi Jain">Bhumi Jain</button>
+                <button type="button" class="servicing-option" role="option" data-value="Kedar Bhosle">Kedar Bhosle</button>
+                <button type="button" class="servicing-option" role="option" data-value="Mayank Bheda">Mayank Bheda</button>
+                <button type="button" class="servicing-option" role="option" data-value="Nayan Chudasama">Nayan Chudasama</button>
+                <button type="button" class="servicing-option" role="option" data-value="Prachi Joshi">Prachi Joshi</button>
+                <button type="button" class="servicing-option" role="option" data-value="Sarvesh Gawade">Sarvesh Gawade</button>
+              </div>
+            </div>
+          </label>
           <label class="fld"><span>Date</span><input class="u" data-key="date" type="date"></label>
         </div>
       </div>
@@ -481,15 +638,125 @@ function render(){
 
   document.querySelectorAll("[data-key]").forEach(n => {
     if(!n.value && state[n.dataset.key]) n.value = state[n.dataset.key];
+    if(n.type === "date") n.classList.toggle("has-value", !!n.value);
     if(n.tagName === "TEXTAREA") requestAnimationFrame(() => grow(n));
     if(n.classList.contains("blank")) sizeBlank(n);
+    if(n.type === "date") n.classList.toggle("has-value", !!n.value);
     n.addEventListener("input", () => {
       state[n.dataset.key] = n.value;
+      if(n.type === "date") n.classList.toggle("has-value", !!n.value);
       if(n.tagName === "TEXTAREA") grow(n);
       if(n.classList.contains("blank")) sizeBlank(n);
       save(); update();
     });
   });
+}
+
+function setupDatePicker(){
+  const date = document.querySelector('[data-key="date"]');
+  if(!date || date.dataset.calendarBound === "1") return;
+  date.dataset.calendarBound = "1";
+
+  const openCalendar = () => {
+    date.focus();
+    if(typeof date.showPicker === "function"){
+      try { date.showPicker(); } catch(e) {}
+    }
+  };
+
+  date.addEventListener("click", openCalendar);
+  date.addEventListener("focus", () => {
+    if(typeof date.showPicker === "function"){
+      try { date.showPicker(); } catch(e) {}
+    }
+  });
+}
+
+function setupServicingDropdown(){
+  const root = document.getElementById("servicingSelect");
+  if(!root || root.dataset.bound === "1") return;
+  root.dataset.bound = "1";
+
+  const trigger = root.querySelector(".servicing-trigger");
+  const valueEl = root.querySelector(".servicing-value");
+  const menu = root.querySelector(".servicing-menu");
+  const options = [...root.querySelectorAll(".servicing-option")];
+
+  const positionMenu = () => {
+    if(!root.classList.contains("open")) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const gap = 10;
+    const viewportPadding = 16;
+    const desiredWidth = Math.max(rect.width, 260);
+    const width = Math.min(desiredWidth, window.innerWidth - viewportPadding * 2);
+
+    menu.style.width = width + "px";
+
+    const spaceBelow = window.innerHeight - rect.bottom - gap - viewportPadding;
+    const spaceAbove = rect.top - gap - viewportPadding;
+    const menuHeight = Math.min(menu.scrollHeight, Math.floor(window.innerHeight * .72));
+    const openUp = spaceBelow < Math.min(260, menuHeight) && spaceAbove > spaceBelow;
+
+    const available = Math.max(140, openUp ? spaceAbove : spaceBelow);
+    const top = openUp
+      ? Math.max(viewportPadding, rect.top - Math.min(menuHeight, available) - gap)
+      : Math.min(window.innerHeight - viewportPadding - Math.min(menuHeight, available), rect.bottom + gap);
+
+    const left = Math.min(
+      Math.max(viewportPadding, rect.left),
+      window.innerWidth - width - viewportPadding
+    );
+
+    menu.style.left = left + "px";
+    menu.style.top = top + "px";
+    menu.style.maxHeight = Math.max(140, Math.min(380, available)) + "px";
+  };
+
+  const renderServicing = () => {
+    const value = state.servicing || "";
+    const found = options.find(o => o.dataset.value === value);
+    valueEl.textContent = found ? value : "Select team member";
+    valueEl.classList.toggle("placeholder", !found);
+    options.forEach(o => o.setAttribute("aria-selected", o.dataset.value === value ? "true" : "false"));
+  };
+
+  const close = () => {
+    root.classList.remove("open");
+    trigger.setAttribute("aria-expanded","false");
+  };
+
+  trigger.onclick = (e) => {
+    e.stopPropagation();
+    const open = !root.classList.contains("open");
+    if(open){
+      root.classList.add("open");
+      trigger.setAttribute("aria-expanded","true");
+      requestAnimationFrame(positionMenu);
+    }else{
+      close();
+    }
+  };
+
+  options.forEach(o => {
+    o.onclick = (e) => {
+      e.stopPropagation();
+      state.servicing = o.dataset.value;
+      renderServicing();
+      save();
+      update();
+      close();
+    };
+  });
+
+  document.addEventListener("click", e => {
+    if(!root.contains(e.target)) close();
+  });
+
+  window.addEventListener("resize", positionMenu);
+  window.addEventListener("scroll", positionMenu, {passive:true});
+
+  renderServicing();
 }
 
 function refCode(){
@@ -553,7 +820,7 @@ function toMarkdown(){
 }
 function payload(){
   const answers = {}; Object.keys(state).forEach(k => { if(filled(state[k])) answers[k] = state[k]; });
-  return {ref: refCode(), client: state.client || "", manager: state.manager || "", date: state.date || "", answers, markdown: toMarkdown(), submittedAt: new Date().toISOString()};
+  return {ref: refCode(), client: state.client || "", manager: state.manager || "", servicing: state.servicing || "", date: state.date || "", answers, markdown: toMarkdown(), submittedAt: new Date().toISOString()};
 }
 
 const toastEl = document.getElementById("toast"), statusEl = document.getElementById("status");
@@ -593,7 +860,7 @@ use("downloads").then(dl => {
   };
 });
 
-render(); update(); watchChapters();
+render(); update(); setupServicingDropdown(); setupDatePicker(); watchChapters();
 </script>
 </body>
 </html>
