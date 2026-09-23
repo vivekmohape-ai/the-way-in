@@ -63,27 +63,30 @@ def build_frontend(source: str) -> tuple[str, str, str]:
 
     core_js = original_js[:backend_start]
 
-    # IMPORTANT: setupServicingDropdown() originally declares a local `root`.
-    # The generic DOM scoping below also converts document.getElementById(...) to
-    # root.querySelector(...). Without this rename, that line becomes:
-    # const root = root.querySelector(...)
-    # which causes: Cannot access 'root' before initialization.
-    start = core_js.find("function setupServicingDropdown(){")
-    end = core_js.find("function setupDatePicker(){", start)
-    if start >= 0 and end > start:
-        block = core_js[start:end]
-        block = block.replace(
-            'const root = document.getElementById("servicingSelect");',
-            'const servicingRoot = document.getElementById("servicingSelect");',
-            1,
-        )
-        block = block.replace("root.dataset", "servicingRoot.dataset")
-        block = block.replace("!root.", "!servicingRoot.")
-        block = block.replace("root.classList", "servicingRoot.classList")
-        block = block.replace("root.querySelector", "servicingRoot.querySelector")
-        block = block.replace("root.contains", "servicingRoot.contains")
-        core_js = core_js[:start] + block + core_js[end:]
+    # setupServicingDropdown() uses its own local variable named `root`.
+    # Rename every root reference inside that function before the global
+    # document -> root scoping transform below.
+    servicing_match = re.search(
+        r"function setupServicingDropdown\(\)\{.*?(?=\nfunction \w+\()",
+        core_js,
+        flags=re.S,
+    )
 
+    if servicing_match:
+        servicing_block = servicing_match.group(0)
+        servicing_block = re.sub(
+            r"\broot\b",
+            "servicingRoot",
+            servicing_block,
+        )
+        core_js = (
+            core_js[:servicing_match.start()]
+            + servicing_block
+            + core_js[servicing_match.end():]
+        )
+
+    # Safety check: this pattern would cause the reported
+    # "Cannot access 'root' before initialization" error.
     # Scope normal DOM lookups to the Streamlit V2 component root.
     core_js = re.sub(
         r'document\.getElementById\(("[^"]+")\)',
