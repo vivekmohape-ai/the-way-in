@@ -15,28 +15,13 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-
 SOURCE = Path(__file__).with_name("original.html")
 
 
 def extract_source_parts(source: str) -> tuple[str, str, str]:
-    style_match = re.search(
-        r"<style>(.*?)</style>",
-        source,
-        flags=re.S | re.I,
-    )
-
-    body_match = re.search(
-        r"<body>(.*?)<script>",
-        source,
-        flags=re.S | re.I,
-    )
-
-    script_match = re.search(
-        r"<script>(.*?)</script>",
-        source,
-        flags=re.S | re.I,
-    )
+    style_match = re.search(r"<style>(.*?)</style>", source, flags=re.S | re.I)
+    body_match = re.search(r"<body>(.*?)<script>", source, flags=re.S | re.I)
+    script_match = re.search(r"<script>(.*?)</script>", source, flags=re.S | re.I)
 
     if not (style_match and body_match and script_match):
         raise RuntimeError(
@@ -51,14 +36,12 @@ def extract_source_parts(source: str) -> tuple[str, str, str]:
 
 
 def build_frontend(source: str) -> tuple[str, str, str]:
-
     css, body, original_js = extract_source_parts(source)
 
     css = (
         '@import url("https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@300;400;500;600&family=Inter+Tight:wght@300;400;500;600&display=swap");\n'
         + css
         + """
-        
 /* Streamlit host reset */
 [data-testid="stMainBlockContainer"] {
     max-width: none !important;
@@ -73,93 +56,72 @@ def build_frontend(source: str) -> tuple[str, str, str]:
 """
     )
 
-    # Remove the original Claude database / downloads integration.
     backend_start = original_js.find(
         'const toastEl = document.getElementById("toast")'
     )
-
-    render_start = original_js.find(
-        "render(); update(); watchChapters();"
-    )
-
-    if backend_start < 0 or render_start < 0:
+    if backend_start < 0:
         raise RuntimeError(
             "Could not locate the original submission integration in the HTML."
         )
 
-    core_js = (
-        original_js[:backend_start]
-        + original_js[render_start:]
-    )
+    core_js = original_js[:backend_start]
 
-    core_js = core_js.replace(
-        "render(); update(); watchChapters();",
-        "if(!initialized){ render(); update(); watchChapters(); }",
-    )
-
-    # Scope DOM lookups to the V2 component root.
     core_js = re.sub(
-        r'document\.getElementById\(("[^"]+")\)',
-        lambda m:
-            'root.querySelector("#' + m.group(1)[1:-1] + '")',
+        r'document\.getElementById\((\"[^\"]+\")\)',
+        lambda m: 'root.querySelector("#' + m.group(1)[1:-1] + '")',
         core_js,
     )
-
     core_js = core_js.replace(
         "document.querySelectorAll(",
         "root.querySelectorAll(",
     )
-
     core_js = core_js.replace(
         "document.querySelector(",
         "root.querySelector(",
     )
 
-    # Streamlit submission and download handling.
-    core_js += r'''
-
+    core_js += r"""
 const toastEl = root.querySelector("#toast");
 const statusEl = root.querySelector("#status");
 
 const toast = m => {
     toastEl.textContent = m;
     toastEl.classList.add("show");
-
     clearTimeout(toastEl._t);
-
     toastEl._t = setTimeout(
         () => toastEl.classList.remove("show"),
         2600
     );
 };
 
-
 const sendBtn = root.querySelector("#sendBtn");
 const dlBtn = root.querySelector("#dlBtn");
-
 
 sendBtn.hidden = false;
 
 dlBtn.hidden = false;
 dlBtn.textContent = "Download your answers";
 
-
 sendBtn.onclick = () => {
-
     if(!filled(state.client)) {
-
         statusEl.textContent =
             "Add the brand name at the top before sending.";
-
         root
             .querySelector('[data-key="client"]')
             .focus();
+        return;
+    }
 
+    if(!filled(state.servicing)) {
+        statusEl.textContent =
+            "Select the Client Servicing person before sending.";
+        root
+            .querySelector('[data-key="servicing"] .servicing-trigger')
+            .focus();
         return;
     }
 
     sendBtn.disabled = true;
-
     statusEl.textContent = "Sending…";
 
     setTriggerValue(
@@ -168,9 +130,7 @@ sendBtn.onclick = () => {
     );
 };
 
-
 dlBtn.onclick = () => {
-
     const slug =
         (state.client || "answers")
         .replace(/[^\w\- ]+/g, "")
@@ -187,18 +147,14 @@ dlBtn.onclick = () => {
         );
 
     const a = document.createElement("a");
-
     a.href = url;
-
     a.download =
         "Brand-Questionnaire-" +
         slug +
         ".md";
 
     document.body.append(a);
-
     a.click();
-
     a.remove();
 
     setTimeout(
@@ -209,32 +165,27 @@ dlBtn.onclick = () => {
     toast("Answers downloaded.");
 };
 
-
 if(data?.send_status === "success") {
-
     sendBtn.disabled = false;
-
     statusEl.textContent =
         "Answers sent to Another Idea. You can keep editing and send again.";
-
     toast("Answers sent.");
-
 }
-
-
 else if(data?.send_status === "error") {
-
     sendBtn.disabled = false;
-
     statusEl.textContent =
         "Couldn’t send. Check the Streamlit SMTP secrets and try again.";
-
 }
-'''
+
+render();
+update();
+setupServicingDropdown();
+setupDatePicker();
+watchChapters();
+"""
 
     js = """
 export default function(component) {
-
     const {
         parentElement,
         setTriggerValue,
@@ -255,49 +206,57 @@ export default function(component) {
 }
 """
 
-    # Preserve the original body markup.
-    body = (
-        '<div class="twi-streamlit-root">'
-        + body
-        + "</div>"
-    )
-
+    body = '<div class="twi-streamlit-root">' + body + "</div>"
     return body, css, js
 
 
 @st.cache_resource(show_spinner=False)
-def frontend() -> tuple[str, str, str]:
-
+def frontend(source_mtime_ns: int) -> tuple[str, str, str]:
     return build_frontend(
-        SOURCE.read_text(
-            encoding="utf-8"
-        )
+        SOURCE.read_text(encoding="utf-8")
     )
 
 
 def send_email(payload: dict) -> None:
-
-    smtp_user = st.secrets.get(
-        "SMTP_USER",
-        "hr@anotheridea.in",
-    )
-
+    smtp_user = st.secrets.get("SMTP_USER", "hr@anotheridea.in")
     smtp_pass = st.secrets["SMTP_PASS"]
 
-    email_to = st.secrets.get(
-        "EMAIL_TO",
-        "gauravgandhi@anotheridea.in",
-    )
+    servicing_secret_keys = {
+        "Adnan Taraporwala": "ADNAN_EMAIL",
+        "Ashish Pawar": "ASHISH_EMAIL",
+        "Barkha Khandelwal": "BARKHA_EMAIL",
+        "Bhumi Jain": "BHUMI_EMAIL",
+        "Kedar Bhosle": "KEDAR_EMAIL",
+        "Mayank Bheda": "MAYANK_EMAIL",
+        "Nayan Chudasama": "NAYAN_EMAIL",
+        "Prachi Joshi": "PRACHI_EMAIL",
+        "Sarvesh Gawade": "SARVESH_EMAIL",
+    }
 
-    client = (
-        payload.get("client")
-        or "Untitled"
-    )
+    servicing_person = (
+        payload.get("servicing") or ""
+    ).strip()
 
-    ref = (
-        payload.get("ref")
-        or "No reference"
-    )
+    secret_key = servicing_secret_keys.get(servicing_person)
+    if not secret_key:
+        raise ValueError("Invalid or missing Client Servicing selection")
+
+    servicing_email = st.secrets[secret_key].strip()
+
+    fixed_recipients = [
+        x.strip()
+        for x in st.secrets["FIXED_RECIPIENTS"].split(",")
+        if x.strip()
+    ]
+
+    cc_recipients = [
+        email
+        for email in fixed_recipients
+        if email.lower() != servicing_email.lower()
+    ]
+
+    client = payload.get("client") or "Untitled"
+    ref = payload.get("ref") or "No reference"
 
     subject = (
         f"The Way In submission | "
@@ -313,6 +272,7 @@ def send_email(payload: dict) -> None:
         "The Way In — Another Idea\n\n"
         f"Brand: {client}\n"
         f"Manager: {payload.get('manager') or '—'}\n"
+        f"Client Servicing: {servicing_person}\n"
         f"Reference: {ref}\n"
         f"Date: {payload.get('date') or '—'}\n"
         f"Submitted at: "
@@ -321,41 +281,26 @@ def send_email(payload: dict) -> None:
     )
 
     msg = EmailMessage()
-
     msg["From"] = smtp_user
-    msg["To"] = email_to
+    msg["To"] = servicing_email
+    if cc_recipients:
+        msg["Cc"] = ", ".join(cc_recipients)
     msg["Subject"] = subject
-
     msg.set_content(plain)
 
-    smtp_host = st.secrets.get(
-        "SMTP_HOST",
-        "smtp.gmail.com",
-    )
-
-    smtp_port = int(
-        st.secrets.get(
-            "SMTP_PORT",
-            465,
-        )
-    )
+    smtp_host = st.secrets.get("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(st.secrets.get("SMTP_PORT", 465))
 
     with smtplib.SMTP_SSL(
         smtp_host,
         smtp_port,
         timeout=30,
     ) as smtp:
-
-        smtp.login(
-            smtp_user,
-            smtp_pass,
-        )
-
+        smtp.login(smtp_user, smtp_pass)
         smtp.send_message(msg)
 
 
-HTML, CSS, JS = frontend()
-
+HTML, CSS, JS = frontend(SOURCE.stat().st_mtime_ns)
 
 component = st.components.v2.component(
     name="another_idea_the_way_in_v2",
@@ -365,44 +310,26 @@ component = st.components.v2.component(
     isolate_styles=False,
 )
 
-
 send_status = st.session_state.pop(
     "twi_send_status",
     None,
 )
 
-
 result = component(
     key="the-way-in-questionnaire-v2",
-
-    data={
-        "send_status": send_status
-    },
-
+    data={"send_status": send_status},
     width="stretch",
-
     height="content",
-
     on_submit_change=lambda: None,
 )
 
-
 if getattr(result, "submit", None):
-
     payload = result.submit
 
     try:
-
         send_email(payload)
-
-        st.session_state[
-            "twi_send_status"
-        ] = "success"
-
+        st.session_state["twi_send_status"] = "success"
     except Exception:
-
-        st.session_state[
-            "twi_send_status"
-        ] = "error"
+        st.session_state["twi_send_status"] = "error"
 
     st.rerun()
