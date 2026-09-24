@@ -63,30 +63,26 @@ def build_frontend(source: str) -> tuple[str, str, str]:
 
     core_js = original_js[:backend_start]
 
-    # setupServicingDropdown() uses its own local variable named `root`.
-    # Rename every root reference inside that function before the global
-    # document -> root scoping transform below.
+    # IMPORTANT: setupServicingDropdown() has its own local variable named `root`.
+    # The Streamlit V2 wrapper also exposes a component root named `root`, and the
+    # generic DOM scoping below rewrites document.getElementById(...) to
+    # root.querySelector(...). Rename the dropdown helper's local root first,
+    # independent of function order, so it can never become:
+    # const root = root.querySelector(...)
     servicing_match = re.search(
         r"function setupServicingDropdown\(\)\{.*?(?=\nfunction \w+\()",
         core_js,
         flags=re.S,
     )
-
     if servicing_match:
         servicing_block = servicing_match.group(0)
-        servicing_block = re.sub(
-            r"\broot\b",
-            "servicingRoot",
-            servicing_block,
-        )
+        servicing_block = re.sub(r"\broot\b", "servicingRoot", servicing_block)
         core_js = (
             core_js[:servicing_match.start()]
             + servicing_block
             + core_js[servicing_match.end():]
         )
 
-    # Safety check: this pattern would cause the reported
-    # "Cannot access 'root' before initialization" error.
     # Scope normal DOM lookups to the Streamlit V2 component root.
     core_js = re.sub(
         r'document\.getElementById\(("[^"]+")\)',
@@ -95,6 +91,11 @@ def build_frontend(source: str) -> tuple[str, str, str]:
     )
     core_js = core_js.replace("document.querySelectorAll(", "root.querySelectorAll(")
     core_js = core_js.replace("document.querySelector(", "root.querySelector(")
+
+    if "const root = root.querySelector" in core_js:
+        raise RuntimeError(
+            "Invalid Client Servicing root scoping generated in frontend JavaScript."
+        )
 
     core_js += r'''
 
@@ -136,26 +137,12 @@ sendBtn.onclick = () => {
     setTriggerValue("submit", payload());
 };
 
+// Native Streamlit download fallback. Browser downloads initiated from an
+// embedded component iframe can be blocked by browser sandboxing, so send the
+// completed markdown back to Python and let Streamlit create the actual file.
 dlBtn.onclick = () => {
-    const slug =
-        (state.client || "answers")
-        .replace(/[^\w\- ]+/g, "")
-        .trim()
-        .replace(/\s+/g, "-")
-        || "answers";
-
-    const url = URL.createObjectURL(
-        new Blob([toMarkdown()], { type: "text/markdown" })
-    );
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "Brand-Questionnaire-" + slug + ".md";
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    toast("Answers downloaded.");
+    statusEl.textContent = "Preparing your download…";
+    setTriggerValue("download", payload());
 };
 
 if(data?.send_status === "success") {
@@ -294,6 +281,7 @@ result = component(
     on_submit_change=lambda: None,
 )
 
+# Handle email submission.
 if getattr(result, "submit", None):
     payload = result.submit
 
@@ -304,3 +292,26 @@ if getattr(result, "submit", None):
         st.session_state["twi_send_status"] = "error"
 
     st.rerun()
+
+# Handle downloads outside the component iframe using Streamlit's native
+# download button. This works reliably even when the browser blocks iframe
+# initiated downloads.
+if getattr(result, "download", None):
+    download_payload = result.download
+    markdown = download_payload.get("markdown") or "No answers submitted."
+    client = download_payload.get("client") or "answers"
+    slug = re.sub(r"[^\w\- ]+", "", client).strip()
+    slug = re.sub(r"\s+", "-", slug) or "answers"
+    st.session_state["twi_download_data"] = markdown
+    st.session_state["twi_download_filename"] = f"Brand-Questionnaire-{slug}.md"
+    st.rerun()
+
+if st.session_state.get("twi_download_data"):
+    st.download_button(
+        label="Download your answers",
+        data=st.session_state["twi_download_data"],
+        file_name=st.session_state.get("twi_download_filename", "Brand-Questionnaire-answers.md"),
+        mime="text/markdown",
+        use_container_width=False,
+        key="twi_native_download",
+    )
