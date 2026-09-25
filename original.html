@@ -403,7 +403,6 @@ textarea.a{min-height:92px;overflow:hidden}
           <div class="proc-name"><span class="lam" aria-hidden="true"></span>The Way In</div>
           <div class="proc-sub">Another Idea’s brand discovery. Stage one of three.</div>
         </div>
-        <div class="ref">Prepared for<b data-bind="client">Your brand</b><span data-bind="ref"></span></div>
       </div>
       <h1>This is not<br>a test.</h1>
       <p class="lede">It is a way into the truth of the business.</p>
@@ -547,8 +546,40 @@ const PARTS = [
  ]}
 ];
 
-let state = {};
-const save = () => {};
+const DRAFT_KEY = "the-way-in-another-idea-draft-v3";
+
+function loadDraft(){
+  try{
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if(!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed.state && typeof parsed.state === "object" ? parsed.state : parsed)
+      : {};
+  }catch(e){ return {}; }
+}
+
+let state = loadDraft();
+let saveTimer = 0;
+
+function persistDraft(){
+  try{
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
+      state,
+      savedAt: new Date().toISOString()
+    }));
+  }catch(e){}
+}
+
+const save = () => {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(persistDraft, 180);
+};
+
+window.addEventListener("pagehide", persistDraft);
+window.addEventListener("visibilitychange", () => {
+  if(document.visibilityState === "hidden") persistDraft();
+});
 const el = (t, c, x) => { const n = document.createElement(t); if(c) n.className = c; if(x != null) n.textContent = x; return n; };
 const filled = v => Array.isArray(v) ? v.length > 0 : (typeof v === "number" ? true : !!(v && String(v).trim()));
 
