@@ -137,12 +137,31 @@ sendBtn.onclick = () => {
     setTriggerValue("submit", payload());
 };
 
-// Native Streamlit download fallback. Browser downloads initiated from an
-// embedded component iframe can be blocked by browser sandboxing, so send the
-// completed markdown back to Python and let Streamlit create the actual file.
+// Direct browser download from the visible button beside Send answers.
+// The click originates from the user's gesture, so the browser treats it as
+// an allowed download rather than a background action.
 dlBtn.onclick = () => {
-    statusEl.textContent = "Preparing your download…";
-    setTriggerValue("download", payload());
+    const slug = (state.client || "answers")
+        .replace(/[^\w\- ]+/g, "")
+        .trim()
+        .replace(/\s+/g, "-") || "answers";
+
+    try {
+        const blob = new Blob([toMarkdown()], {type: "text/markdown;charset=utf-8"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "Brand-Questionnaire-" + slug + ".md";
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        statusEl.textContent = "Your answers were downloaded.";
+        toast("Answers downloaded.");
+    } catch(e) {
+        statusEl.textContent = "Couldn’t download your answers. Please try again.";
+    }
 };
 
 if(data?.send_status === "success") {
@@ -292,26 +311,3 @@ if getattr(result, "submit", None):
         st.session_state["twi_send_status"] = "error"
 
     st.rerun()
-
-# Handle downloads outside the component iframe using Streamlit's native
-# download button. This works reliably even when the browser blocks iframe
-# initiated downloads.
-if getattr(result, "download", None):
-    download_payload = result.download
-    markdown = download_payload.get("markdown") or "No answers submitted."
-    client = download_payload.get("client") or "answers"
-    slug = re.sub(r"[^\w\- ]+", "", client).strip()
-    slug = re.sub(r"\s+", "-", slug) or "answers"
-    st.session_state["twi_download_data"] = markdown
-    st.session_state["twi_download_filename"] = f"Brand-Questionnaire-{slug}.md"
-    st.rerun()
-
-if st.session_state.get("twi_download_data"):
-    st.download_button(
-        label="Download your answers",
-        data=st.session_state["twi_download_data"],
-        file_name=st.session_state.get("twi_download_filename", "Brand-Questionnaire-answers.md"),
-        mime="text/markdown",
-        use_container_width=False,
-        key="twi_native_download",
-    )
